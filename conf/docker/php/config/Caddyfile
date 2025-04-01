@@ -1,0 +1,25 @@
+{
+	frankenphp
+	order php_server before file_server
+}
+
+:80 {
+	root * /srv/public
+	encode zstd gzip
+	php_server
+	header -X-Powered-By
+
+	# CORS Full Access e permissões para iframe
+	header {
+		Access-Control-Allow-Origin "*"
+		Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+		Access-Control-Allow-Headers "*"
+		Access-Control-Allow-Credentials "true"
+		Access-Control-Expose-Headers "*"
+		Access-Control-Max-Age 86400
+
+		# Permitir ser exibido em iframe
+		Content-Security-Policy "frame-ancestors *"
+		X-Frame-Options "ALLOWALL"
+	}
+}

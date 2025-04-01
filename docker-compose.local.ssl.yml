@@ -1,0 +1,139 @@
+x-php: &php
+  build:
+    context: .
+    dockerfile: ./conf/docker/php/php.dockerfile
+    args:
+      ENVIRONMENT: development
+  restart: unless-stopped
+  working_dir: /srv
+  volumes:
+    - ./www/app:/srv
+    - ~/www/app/.composer:/home/composer/.cache/composer
+    - ~/www/app/.composer/auth.json:/config/composer/auth.json
+    - ./www/app/vendor:/srv/vendor
+    - ./conf/traefik:/srv/traefik
+    - ./conf:/srv/conf
+  depends_on:
+    - mysql
+  networks:
+    - minharede
+
+services:
+  traefik:
+    image: traefik:v3.0
+    restart: unless-stopped
+    command: >-
+      --entryPoints.web.address=:80
+      --entryPoints.web.http.redirections.entrypoint.to=web-secure
+      --entryPoints.web.http.redirections.entrypoint.scheme=https
+      --entryPoints.web-secure.address=:443
+      --api=true
+      --api.dashboard=true
+      --providers.docker=true
+      --providers.docker.exposedByDefault=false
+      --providers.file.directory=/srv/configs
+      --providers.file.watch=true
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./conf/traefik:/srv
+    labels:
+      - traefik.enable=true
+
+      # CORS Full Access
+      - traefik.http.middlewares.cors.headers.accessControlAllowOrigin=*
+      - traefik.http.middlewares.cors.headers.accessControlAllowMethods=GET,POST,PUT,DELETE,OPTIONS
+      - traefik.http.middlewares.cors.headers.accessControlAllowHeaders=*
+      - traefik.http.middlewares.cors.headers.accessControlAllowCredentials=true
+      - traefik.http.middlewares.cors.headers.accessControlExposeHeaders=*
+      - traefik.http.middlewares.cors.headers.accessControlMaxAge=86400
+
+      # Permitir ser exibido em iframe
+      - traefik.http.middlewares.cors.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors *
+      - traefik.http.middlewares.cors.headers.customResponseHeaders.X-Frame-Options=ALLOWALL
+
+      # Roteamento
+      - traefik.http.routers.app.middlewares=cors@docker
+      - traefik.http.routers.traefik.rule=Host(`traefik.docker.localhost`)
+      - traefik.http.routers.traefik.service=api@internal
+      - traefik.http.routers.traefik.tls=true
+      - traefik.http.services.traefik.loadBalancer.server.port=8080
+    networks:
+      - minharede
+  
+  mysql:
+    image: mysql:8.0-debian
+    container_name: mysql
+    restart: unless-stopped
+    volumes:
+      - ./www/app/database:/docker-entrypoint-initdb.d
+      - mysql-data:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: barbeshop
+      MYSQL_ALLOW_EMPTY_PASSWORD: "false"
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    networks:
+      - minharede
+
+  php:
+    <<: *php
+    container_name: php
+    user: "root:root"
+    ports:
+      - '8000:80'
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.php.entryPoints=web-secure
+      - traefik.http.routers.php.rule=Host(`app.localhost`)
+      - traefik.http.routers.php.tls=true
+    depends_on:
+      - mysql
+    networks:
+      - minharede
+
+  queue:
+    <<: *php
+    networks:
+      - minharede
+
+  scheduler:
+    <<: *php
+    command: supercronic /srv/conf/docker/php/config/schedule.cron
+    networks:
+      - minharede
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - minharede
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    environment:
+      PMA_HOST: mysql
+      MYSQL_ROOT_PASSWORD: root
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.phpmyadmin.entryPoints=web-secure
+      - traefik.http.routers.phpmyadmin.rule=Host(`phpmyadmin.app.localhost`)
+      - traefik.http.routers.phpmyadmin.tls=true
+    depends_on:
+      - mysql
+    networks:
+      - minharede
+
+volumes:
+  redis-data:
+  mysql-data:
+    driver: local
+
+networks:
+  minharede:
+    external: true
