@@ -1,12 +1,28 @@
-# base_server
+# Base Server
 
-sudo mkdir ./conf/traefik/.certificates
+Este repositório contém a configuração para um servidor base utilizando Docker e Traefik.
 
+## Configuração Inicial
+
+Crie a pasta de certificados:
+```bash
+sudo mkdir -p ./conf/traefik/.certificates
+```
+
+Defina as permissões adequadas:
+```bash
 sudo chmod -R 777 base_server
+```
 
-## Novo app deve ser inserido as labe
+## Adicionando um Novo Aplicativo
 
+Sempre que um novo serviço for adicionado, ele deve conter as labels do Traefik configuradas corretamente.
+
+Exemplo de configuração para um serviço Docker:
+
+```yaml
 version: '3.9'
+
 services:
   portainer:
     image: portainer/portainer-ce
@@ -17,7 +33,7 @@ services:
       - portainer_data:/data
     labels:
       - traefik.enable=true
-      - traefik.http.routers.portainer.entryPoints=web-secure // <- routers."portainer", portainer é o nome do servico! mude colocando nome do novo servico
+      - traefik.http.routers.portainer.entryPoints=web-secure # "portainer" é o nome do serviço. Mude para o nome do novo serviço.
       - traefik.http.routers.portainer.rule=Host(`portainer.comandas.io`)
       - traefik.http.routers.portainer.tls=true
       - traefik.http.services.portainer.loadBalancer.server.port=9000
@@ -26,8 +42,15 @@ services:
       - TZ=America/Sao_Paulo
     networks:
       - minharede
-      
-// a networks sempre tem que colocar      
+```
+
+## Configuração de Redes
+
+A rede `minharede` é utilizada para garantir que todos os serviços dentro do Docker possam se comunicar corretamente. Como essa rede é externa, ela permite que diferentes `docker-compose.yml` compartilhem os mesmos serviços sem precisar recriar redes separadas para cada aplicação. Isso facilita a gestão e conexão entre contêineres.
+
+```yaml
 networks:
   minharede:
     external: true
+```
+
