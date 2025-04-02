@@ -42,6 +42,9 @@ services:
       - TZ=America/Sao_Paulo
     networks:
       - minharede
+networks:
+  minharede:
+    external: true
 ```
 
 ## Configuração de Redes
